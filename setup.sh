@@ -4,55 +4,34 @@ set -e
 
 echo "=== Telegram Group Bot — Termux Setup ==="
 
-# 1. Update packages
-echo "[1/6] Updating Termux packages..."
+echo "[1/5] Updating Termux packages..."
 pkg update -y && pkg upgrade -y
 
-# 2. Install Python
-echo "[2/6] Installing Python..."
-pkg install -y python python-pip
+echo "[2/5] Installing Python and tmux..."
+pkg install -y python python-pip tmux
 
-# 3. Install git (optional but useful)
-pkg install -y git 2>/dev/null || true
-
-# 4. Install tmux for background sessions
-echo "[3/6] Installing tmux..."
-pkg install -y tmux
-
-# 5. Install Python dependencies
-echo "[4/6] Installing Python packages..."
+echo "[3/5] Installing Python packages..."
 pip install --upgrade pip
 pip install -r requirements.txt
 
-# 6. Create .env if it doesn't exist
 if [ ! -f .env ]; then
-    echo "[5/6] Creating .env file..."
+    echo "[4/5] Creating .env file..."
     cat > .env <<'EOF'
 # === Required ===
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
-ANTHROPIC_API_KEY=your_anthropic_api_key_here
 
 # === Optional ===
-CLAUDE_MODEL=claude-sonnet-4-6
-MAX_HISTORY=20
-RATE_LIMIT_PER_MIN=5
-# Comma-separated Telegram user IDs who can use admin commands (empty = all admins)
-ADMIN_IDS=
-
-# Custom system prompt (optional)
-# SYSTEM_PROMPT=You are a helpful group assistant.
+WARN_LIMIT=3
 EOF
-    echo "  -> .env created. Fill in your tokens before running."
+    echo "  -> .env created. Add your TELEGRAM_BOT_TOKEN before running."
 else
-    echo "[5/6] .env already exists, skipping."
+    echo "[4/5] .env already exists, skipping."
 fi
 
-# 7. Make scripts executable
-chmod +x start.sh stop.sh 2>/dev/null || true
+chmod +x start.sh stop.sh watchdog.sh boot_start.sh 2>/dev/null || true
 
-echo "[6/6] Setup complete!"
+echo "[5/5] Setup complete!"
 echo ""
 echo "Next steps:"
-echo "  1. Edit .env and add your TELEGRAM_BOT_TOKEN and ANTHROPIC_API_KEY"
-echo "  2. Run:  ./start.sh"
-echo "  3. To keep the bot running after closing Termux, use tmux (./start.sh handles this)"
+echo "  1. Edit .env:    nano .env"
+echo "  2. Start bot:    ./start.sh"
