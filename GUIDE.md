@@ -211,36 +211,114 @@ You can also message the bot directly — it responds to all messages.
 
 ## 10. Keep the Bot Running 24/7
 
-### Prevent Android from killing Termux
+This section covers three layers of reliability:
 
-1. **Disable battery optimization for Termux:**
-   - Android Settings → Apps → Termux → Battery → **Unrestricted** (or "Don't optimize")
+| Layer | What it does |
+|-------|-------------|
+| **tmux** | Keeps the bot alive after you close Termux |
+| **watchdog.sh** | Auto-restarts the bot if it crashes |
+| **Termux:Boot** | Auto-starts everything when the phone reboots |
+| **Wake lock** | Prevents Android from suspending the process |
 
-2. **Keep a Termux notification active:**
-   - The tmux session keeps running in the background
-   - Termux shows a persistent notification when a session is active
+---
 
-3. **Acquire wake lock (optional, for strict power management):**
+### Step A — Disable Battery Optimization (required)
+
+Without this, Android will kill Termux after a few minutes in the background.
+
+1. Open **Android Settings**
+2. Go to **Apps** → **Termux** → **Battery**
+3. Select **Unrestricted** (exact wording varies by phone brand)
+
+> On Samsung: Settings → Device Care → Battery → Background usage limits → Never sleeping apps → Add Termux
+> On Xiaomi/MIUI: Settings → Apps → Manage apps → Termux → Battery saver → No restrictions
+
+---
+
+### Step B — Acquire Wake Lock (recommended)
+
+Prevents the CPU from sleeping while the bot runs. Requires **Termux:API**.
+
+**Install Termux:API:**
+1. Open F-Droid → search **Termux:API** → Install
+2. Inside Termux, run:
    ```bash
-   termux-wake-lock
+   pkg install -y termux-api
    ```
-   *(requires Termux:API app from F-Droid)*
 
-### Auto-restart on boot (optional)
+The watchdog script (`watchdog.sh`) calls `termux-wake-lock` automatically on startup.
 
-Install Termux:Boot from F-Droid, then create:
-
+To acquire it manually:
 ```bash
+termux-wake-lock    # acquire
+termux-wake-unlock  # release
+```
+
+---
+
+### Step C — Auto-Restart on Crash (built-in)
+
+The updated `start.sh` already uses `watchdog.sh` instead of running `bot.py` directly.
+
+**How it works:**
+```
+start.sh
+  └── tmux session "groupbot"
+        └── watchdog.sh  (infinite loop)
+              └── python bot.py
+                    ↑ restarted here on crash (5s delay)
+```
+
+When the bot crashes for any reason (network drop, API error, exception), the watchdog restarts it automatically and logs the event to `bot.log`.
+
+---
+
+### Step D — Auto-Start on Phone Reboot
+
+**Install Termux:Boot:**
+1. Open F-Droid → search **Termux:Boot** → Install
+2. Open the Termux:Boot app once — this registers it as a boot service
+
+**Install the boot script:**
+```bash
+# Inside Termux:
 mkdir -p ~/.termux/boot
-cat > ~/.termux/boot/start-bot.sh <<'EOF'
-#!/data/data/com.termux/files/usr/bin/bash
-cd ~/ai
-./start.sh
-EOF
+cp ~/ai/boot_start.sh ~/.termux/boot/start-bot.sh
 chmod +x ~/.termux/boot/start-bot.sh
 ```
 
-The bot will automatically start whenever your phone reboots.
+**Test it:**
+```bash
+# Reboot your phone, then check after ~30 seconds:
+tmux attach -t groupbot
+```
+
+The bot will now start automatically every time the phone boots.
+
+---
+
+### How to monitor the bot
+
+```bash
+# View live logs (Ctrl+B then D to detach without stopping)
+tmux attach -t groupbot
+
+# Tail the log file from a separate terminal
+tail -f ~/ai/bot.log
+
+# Check if the bot session is running
+tmux ls
+
+# See crash count and restart history
+grep "crash\|Restarting\|Starting bot" ~/ai/bot.log
+```
+
+### Stop and restart
+
+```bash
+./stop.sh     # stop completely
+./start.sh    # start again with watchdog
+```
 
 ---
 
@@ -321,10 +399,12 @@ ai/
 ├── bot.py           # Main bot — handlers, Claude calls, message routing
 ├── config.py        # Reads .env, validates required values
 ├── database.py      # SQLite: conversation history, rate limits, stats
-├── requirements.txt # Python package dependencies
+├── watchdog.sh      # Infinite loop: runs bot.py, restarts on crash, rotates logs
+├── start.sh         # Start watchdog inside a background tmux session
+├── stop.sh          # Stop the bot (kills tmux session)
+├── boot_start.sh    # Termux:Boot script — auto-starts on phone reboot
 ├── setup.sh         # One-time Termux installation script
-├── start.sh         # Start the bot in a background tmux session
-├── stop.sh          # Stop the bot
+├── requirements.txt # Python package dependencies
 ├── GUIDE.md         # This guide
 ├── .env             # Your secrets (not committed to git)
 └── bot_data.db      # Auto-created SQLite database

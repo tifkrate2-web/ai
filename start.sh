@@ -1,5 +1,5 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# Start the Telegram group bot in a persistent tmux session
+# Start the Telegram group bot in a persistent tmux session with watchdog auto-restart
 SESSION="groupbot"
 BOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
@@ -19,24 +19,25 @@ if grep -q "your_anthropic_api_key_here" "$BOT_DIR/.env" 2>/dev/null; then
     exit 1
 fi
 
-# Kill existing session if running
+# Kill existing session if already running
 if tmux has-session -t "$SESSION" 2>/dev/null; then
     echo "Stopping existing bot session..."
     tmux kill-session -t "$SESSION"
     sleep 1
 fi
 
-# Start new tmux session running the bot
-tmux new-session -d -s "$SESSION" -c "$BOT_DIR" \
-    "python bot.py 2>&1 | tee -a bot.log; echo 'Bot exited. Press Enter to close.'; read"
+# Make scripts executable
+chmod +x "$BOT_DIR/watchdog.sh" "$BOT_DIR/stop.sh"
 
-echo "Bot started in tmux session '$SESSION'."
+# Start watchdog (which runs bot.py and restarts it on crash) inside tmux
+tmux new-session -d -s "$SESSION" -c "$BOT_DIR" \
+    "bash watchdog.sh; echo; echo 'Watchdog exited. Press Enter to close.'; read"
+
+echo "Bot started with watchdog in tmux session '$SESSION'."
 echo ""
-echo "Useful commands:"
-echo "  tmux attach -t $SESSION   — view live logs"
+echo "  tmux attach -t $SESSION   — view live logs (Ctrl+B then D to detach)"
 echo "  ./stop.sh                 — stop the bot"
-echo "  tail -f bot.log           — tail the log file"
+echo "  tail -f bot.log           — follow the log file"
 echo ""
-echo "The bot will keep running even if you close this Termux window."
-echo "To prevent Termux from sleeping, go to Android Settings > Battery and"
-echo "disable battery optimization for Termux."
+echo "The bot will auto-restart if it crashes and keep running"
+echo "even when you close this Termux window."
